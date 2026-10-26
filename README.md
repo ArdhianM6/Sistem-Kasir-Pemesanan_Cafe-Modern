@@ -37,11 +37,14 @@ Untuk XAMPP, letakkan project di `htdocs`, impor dua berkas SQL berurutan, lalu 
 
 ## Akun awal
 
-| Peran | Username | Password awal |
-| --- | --- | --- |
-| Administrator | `admin` | `password` |
-| Kasir | `kasir` | `password` |
-| Pelayan | `pelayan` | `password` |
+Semua akun demo memakai password `password`. Login dapat menggunakan username atau email.
+
+| Peran | Username | Email | Password |
+| --- | --- | --- | --- |
+| Administrator | `admin` | `admin@titikkopi.local` | `password` |
+| Manager | `manager` | `manager@titikkopi.local` | `password` |
+| Kasir | `kasir` | `kasir@titikkopi.local` | `password` |
+| Pelayan | `pelayan` | `pelayan@titikkopi.local` | `password` |
 
 Ganti password contoh sebelum aplikasi digunakan di lingkungan nyata. Buat akun baru melalui halaman **Akun pengguna**.
 

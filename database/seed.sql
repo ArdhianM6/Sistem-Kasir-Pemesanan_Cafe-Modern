@@ -2,6 +2,7 @@ USE kasir_kafe;
 
 INSERT IGNORE INTO users(username,email,password_hash,full_name,role,status) VALUES
 ('admin','admin@titikkopi.local','$2y$10$RSlLk/ngBTi.f32Oaz7WvezOM8aSZajX.WLYP8M43uauWwGFr5eNe','Administrator','admin','active'),
+('manager','manager@titikkopi.local','$2y$10$RSlLk/ngBTi.f32Oaz7WvezOM8aSZajX.WLYP8M43uauWwGFr5eNe','Manager Kafe','manager','active'),
 ('kasir','kasir@titikkopi.local','$2y$10$RSlLk/ngBTi.f32Oaz7WvezOM8aSZajX.WLYP8M43uauWwGFr5eNe','Kasir Utama','cashier','active'),
 ('pelayan','pelayan@titikkopi.local','$2y$10$RSlLk/ngBTi.f32Oaz7WvezOM8aSZajX.WLYP8M43uauWwGFr5eNe','Pelayan Kafe','waiter','active');
 

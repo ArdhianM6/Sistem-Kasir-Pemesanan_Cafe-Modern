@@ -94,7 +94,7 @@ app.get('/api/dashboard', auth, asyncRoute(async (req, res) => {
     pool.query(`SELECT od.product_name name,SUM(od.quantity) quantity FROM order_details od JOIN orders o ON o.id=od.order_id WHERE o.created_at::date=CURRENT_DATE AND o.status IN ('processing','completed')${scoped?' AND o.user_id=$1':''} GROUP BY od.product_name ORDER BY quantity DESC LIMIT 1`, userArg),
     pool.query(`SELECT o.id,o.invoice_number,o.created_at,o.grand_total,o.status,o.order_type,u.full_name cashier FROM orders o JOIN users u ON u.id=o.user_id ${scoped?'WHERE o.user_id=$1':''} ORDER BY o.created_at DESC LIMIT 6`, userArg),
     pool.query("SELECT p.name,p.stock,c.name category_name FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock<=$1 ORDER BY p.stock,p.name LIMIT 6", [num(process.env.LOW_STOCK_LIMIT || 5)]),
-    pool.query(`SELECT created_at::date day,COALESCE(SUM(grand_total),0) total FROM orders WHERE created_at>=CURRENT_DATE-6 AND status IN ('processing','completed')${scoped?' AND user_id=$1':''} GROUP BY created_at::date ORDER BY day`, userArg)
+    pool.query(`SELECT created_at::date AS "day",COALESCE(SUM(grand_total),0) total FROM orders WHERE created_at>=CURRENT_DATE-6 AND status IN ('processing','completed')${scoped?' AND user_id=$1':''} GROUP BY created_at::date ORDER BY "day"`, userArg)
   ]);
   res.json({ kpi, best, orders: orders.rows, low: low.rows, chart: chart.rows });
 }));

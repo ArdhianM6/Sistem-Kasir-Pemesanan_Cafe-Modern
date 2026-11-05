@@ -107,3 +107,12 @@ button,input,select{max-width:100%}
   .sidebar nav button{min-width:31px}
   .product-grid{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Keep the account controls reachable when the sidebar is taller than the viewport. */
+.sidebar{overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-color:#d8e1d8 transparent}
+.sidebar .brand,.sidebar nav,.side-note,.profile{flex-shrink:0}
+.profile{padding-bottom:6px}
+@media(max-width:760px){
+  .sidebar{overflow-y:hidden;overflow-x:auto}
+  .sidebar .brand,.sidebar nav{flex-shrink:0}
+}

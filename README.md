@@ -1,4 +1,4 @@
-# Titik Temu Kopi — React + Node.js + Supabase PostgreSQL
+# ALOVERA — React + Node.js + PostgreSQL
 
 Aplikasi kasir kafe dengan UI React, API Express di Vercel Functions, dan database Supabase PostgreSQL. Data transaksi dan stok tersimpan secara persisten di database Supabase.
 

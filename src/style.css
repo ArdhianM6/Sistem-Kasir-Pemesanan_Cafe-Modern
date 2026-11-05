@@ -116,3 +116,8 @@ button,input,select{max-width:100%}
   .sidebar{overflow-y:hidden;overflow-x:auto}
   .sidebar .brand,.sidebar nav{flex-shrink:0}
 }
+
+.mark svg{display:block;width:27px;height:27px;fill:none;stroke:#f0d49b;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.login-art .mark svg{stroke:#204636}
+.receipt-brand .mark{display:grid;place-items:center}
+.brand b{letter-spacing:.08em}

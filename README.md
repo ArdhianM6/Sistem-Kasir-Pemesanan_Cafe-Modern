@@ -1,28 +1,27 @@
-# Titik Temu Kopi — React + Node.js + Supabase
+# Titik Temu Kopi — React + Node.js + Supabase PostgreSQL
 
-Aplikasi kasir kafe dengan UI React, API Express di Vercel Functions, database Supabase PostgreSQL, dan login Supabase Auth. Data transaksi dan stok tersimpan di project Supabase yang sama setelah deploy.
+Aplikasi kasir kafe dengan UI React, API Express di Vercel Functions, dan database Supabase PostgreSQL. Data transaksi dan stok tersimpan secara persisten di database Supabase.
 
 ## Fitur
 
-- Login Supabase Auth dengan profil dan role admin/manager/kasir/pelayan.
+- Login aplikasi dengan profil dan role admin/manager/kasir/pelayan. Password disimpan sebagai hash scrypt di database; aplikasi tidak menggunakan Supabase Auth.
 - Dashboard, transaksi dine-in/takeaway, pembayaran, kembalian, riwayat, struk, dan laporan.
 - Database PostgreSQL memakai transaksi untuk mengunci stok, menyimpan order dan detail, serta mengembalikan stok ketika order dibatalkan.
-- Pengelolaan menu, kategori, dan akun tim. Password akun dikelola Supabase Auth.
+- Pengelolaan menu, kategori, dan akun tim.
 
-## Otomatisasi setup Supabase
+## Setup otomatis Supabase
 
-Saat API pertama kali dibuka, aplikasi otomatis membuat/memperbarui tabel, akun Supabase Auth demo, profil role, kategori, dan menu awal. Tidak perlu membuka SQL Editor atau menjalankan seed manual. Setup aman diulang dan tidak menghapus pesanan/data menu yang sudah ada.
+Saat API pertama kali dibuka, aplikasi otomatis membuat/memperbarui tabel, akun demo, kategori, dan menu awal. Tidak perlu membuka SQL Editor atau menjalankan seed manual. Setup aman diulang dan tidak menghapus pesanan/data menu yang sudah ada.
 
-Tidak perlu membuat project Supabase baru jika kuota project Anda penuh. Aplikasi menggunakan schema database terpisah bernama `titik_temu` di dalam project yang sudah ada, sehingga tabel aplikasi tidak bercampur dengan tabel `public` milik project lain. Cukup hubungkan project tersebut dengan URL, key, dan koneksi database:
+Aplikasi memakai schema database terpisah bernama `titik_temu`. Tabel aplikasi kasir terpisah dari tabel Marketplace di schema `public`. Supabase Auth tidak digunakan, sehingga aplikasi tidak membuat akun atau mengubah konfigurasi Auth di project Marketplace.
 
-- `SUPABASE_URL`: Project URL.
-- `SUPABASE_ANON_KEY`: publishable/anon key.
-- `SUPABASE_SERVICE_ROLE_KEY`: secret/service role key, server saja.
-- `DATABASE_URL`: PostgreSQL connection string Supabase; gunakan pooler untuk Vercel.
+Variabel yang dibutuhkan:
 
-`.env.example` berisi nama variabel tersebut. Isi `.env` lokal untuk menjalankan proyek di komputer. Seed akun demo dipanggil otomatis; `npm run seed` tersedia sebagai cara manual untuk memicu setup lebih awal.
+- `DATABASE_URL` atau `POSTGRES_URL`: koneksi PostgreSQL dari Supabase/Vercel.
+- `SUPABASE_JWT_SECRET` atau `JWT_SECRET`: secret untuk sesi login aplikasi. Integrasi Supabase Vercel menyediakan `SUPABASE_JWT_SECRET`.
+- `TAX_RATE=0.10`, `SERVICE_RATE=0.05`, `LOW_STOCK_LIMIT=5` (opsional; nilai default sudah tersedia).
 
-Akun demo: `admin`, `manager`, `kasir`, atau `pelayan`; password awal `password`.
+Akun demo: `admin`, `manager`, `kasir`, atau `pelayan`; password awal `password`. Ganti password akun demo sebelum membagikan live demo.
 
 ## Menjalankan lokal
 
@@ -38,19 +37,19 @@ Buka `http://localhost:5173`. Vite meneruskan `/api` ke Express di port 3000.
 ## Deploy ke Vercel
 
 1. Hubungkan repository ke Vercel. Framework preset Vite, build command `npm run build`, output `dist`.
-2. Di **Project → Settings → Environment Variables**, atur empat variabel Supabase di atas, `TAX_RATE=0.10`, `SERVICE_RATE=0.05`, dan `LOW_STOCK_LIMIT=5`.
-3. Deploy. Kunjungan pertama ke API otomatis membuat schema `titik_temu`, tabel, dan akun demo; setelah itu login dengan `admin` / `password`.
+2. Hubungkan integrasi Supabase ke project Vercel. Pastikan `POSTGRES_URL` dan `SUPABASE_JWT_SECRET` tersedia untuk Production.
+3. Deploy. Buka `/api/health`; respons `{"ok":true,"setup":"ready"}` berarti database dan setup awal berhasil.
 
-> Jangan commit `.env` atau membagikan secret/service role key. Akun demo menggunakan password publik, jadi ganti passwordnya di Supabase Auth sebelum membagikan live demo. Project Supabase menjadi tempat penyimpanan persisten; Vercel hanya menjalankan UI dan API.
+Jangan commit `.env` atau membagikan secret. Project Supabase menjadi tempat penyimpanan persisten; Vercel menjalankan UI dan API.
 
 ## Struktur
 
 ```text
-api/index.js                 Express API, Supabase Auth, transaksi PostgreSQL
+api/index.js                 Express API, login aplikasi, transaksi PostgreSQL
 src/main.jsx                 Aplikasi React
 src/style.css                Tampilan responsif
-database/schema.postgres.sql Skema Supabase PostgreSQL
-database/seed-postgres.js    Akun Supabase Auth dan data contoh
+database/schema.postgres.sql Skema PostgreSQL
+database/seed-postgres.js    Setup akun dan data contoh
 vercel.json                  Routing API dan SPA
 ```
 

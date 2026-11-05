@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import pg from 'pg';
-import { createClient } from '@supabase/supabase-js';
+import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { ensureSupabaseReady } from './bootstrap.js';
 
 const { Pool } = pg;
@@ -9,16 +10,49 @@ const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 const connectionUrl = databaseUrl ? new URL(databaseUrl) : null;
 for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert']) connectionUrl?.searchParams.delete(key);
 const pool = new Pool({ connectionString: connectionUrl?.toString(), options: '-c search_path=titik_temu,public', ssl: databaseUrl?.includes('localhost') ? false : { rejectUnauthorized: false }, max: 3, idleTimeoutMillis: 5000 });
-const supabaseAuth = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const app = express();
 app.use(express.json({ limit: '100kb' }));
+const scrypt = promisify(scryptCallback);
+const hashPassword = async password => {
+  const salt = randomBytes(16);
+  const hash = await scrypt(password, salt, 64);
+  return `scrypt$${salt.toString('base64url')}$${hash.toString('base64url')}`;
+};
+const verifyPassword = async (password, encoded) => {
+  const [algorithm, saltText, hashText] = String(encoded || '').split('$');
+  if (algorithm !== 'scrypt' || !saltText || !hashText) return false;
+  const expected = Buffer.from(hashText, 'base64url');
+  const actual = await scrypt(password, Buffer.from(saltText, 'base64url'), expected.length);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+};
+const tokenSecret = () => process.env.SUPABASE_JWT_SECRET || process.env.JWT_SECRET;
+const signToken = (user, type, lifetime) => {
+  if (!tokenSecret()) throw new Error('JWT secret is not configured.');
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const header = encode({ alg: 'HS256', typ: 'JWT' });
+  const payload = encode({ iss: 'titik-temu-pos', aud: 'titik-temu-pos', sub: String(user.id), username: user.username, role: user.role, typ: type, exp: Math.floor(Date.now() / 1000) + lifetime });
+  const signature = createHmac('sha256', tokenSecret()).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${signature}`;
+};
+const readToken = (token, type) => {
+  const [header, payload, signature] = String(token || '').split('.');
+  if (!header || !payload || !signature || !tokenSecret()) return null;
+  const expected = createHmac('sha256', tokenSecret()).update(`${header}.${payload}`).digest();
+  let received;
+  try { received = Buffer.from(signature, 'base64url'); } catch { return null; }
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    if (claims.iss !== 'titik-temu-pos' || claims.aud !== 'titik-temu-pos' || claims.typ !== type || claims.exp <= Date.now() / 1000) return null;
+    return claims;
+  } catch { return null; }
+};
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   if (!token) return res.status(401).json({ error: 'Sesi berakhir. Silakan masuk kembali.' });
-  supabaseAuth.auth.getUser(token).then(async ({ data, error }) => {
-    if (error || !data.user) return res.status(401).json({ error: 'Sesi berakhir. Silakan masuk kembali.' });
-    const { rows } = await pool.query("SELECT id,username,full_name,role,status FROM users WHERE auth_uid=$1 AND status='active'", [data.user.id]);
+  const claims = readToken(token, 'access');
+  if (!claims) return res.status(401).json({ error: 'Sesi berakhir. Silakan masuk kembali.' });
+  pool.query("SELECT id,username,full_name,role,status FROM users WHERE id=$1 AND status='active'", [claims.sub]).then(({ rows }) => {
     const profile = rows[0];
     if (!profile) return res.status(401).json({ error: 'Akun tidak aktif atau profil tidak ditemukan.' });
     req.user = { id: profile.id, username: profile.username, name: profile.full_name, role: profile.role };
@@ -29,23 +63,24 @@ const admin = (req, res, next) => req.user.role === 'admin' || req.user.role ===
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const num = n => Math.max(0, Math.trunc(Number(n) || 0));
 
-app.get('/api/health', asyncRoute(async (_req, res) => { await ensureSupabaseReady(pool, supabaseAdmin); await pool.query('SELECT 1'); res.json({ ok: true, setup: 'ready' }); }));
+app.get('/api/health', asyncRoute(async (_req, res) => { await ensureSupabaseReady(pool); await pool.query('SELECT 1'); res.json({ ok: true, setup: 'ready' }); }));
 app.post('/api/login', asyncRoute(async (req, res) => {
-  await ensureSupabaseReady(pool, supabaseAdmin);
+  await ensureSupabaseReady(pool);
   const login = String(req.body.login || '').trim();
-  const { rows } = await pool.query("SELECT id,username,email,auth_uid,full_name,role FROM users WHERE (username=$1 OR email=$1) AND status='active' LIMIT 1", [login]);
+  const { rows } = await pool.query("SELECT id,username,email,full_name,role,password_hash FROM users WHERE (username=$1 OR email=$1) AND status='active' LIMIT 1", [login]);
   const u = rows[0];
-  if (!u) return res.status(401).json({ error: 'Username/email atau password tidak cocok.' });
-  const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: u.email, password: String(req.body.password || '') });
-  if (error || !data.session) return res.status(401).json({ error: 'Username/email atau password tidak cocok.' });
-  res.json({ token: data.session.access_token, user: { id: u.id, name: u.full_name, role: u.role, username: u.username } });
+  if (!u || !(await verifyPassword(String(req.body.password || ''), u.password_hash))) return res.status(401).json({ error: 'Username/email atau password tidak cocok.' });
+  const user = { id: u.id, username: u.username, name: u.full_name, role: u.role };
+  res.json({ token: signToken(user, 'access', 60 * 60), refreshToken: signToken(user, 'refresh', 30 * 24 * 60 * 60), user });
 }));
 app.post('/api/refresh', asyncRoute(async (req, res) => {
-  const refreshToken = String(req.body.refreshToken || '');
-  if (!refreshToken) return res.status(401).json({ error: 'Sesi berakhir. Silakan masuk kembali.' });
-  const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token: refreshToken });
-  if (error || !data.session) return res.status(401).json({ error: 'Sesi berakhir. Silakan masuk kembali.' });
-  res.json({ token: data.session.access_token, refreshToken: data.session.refresh_token });
+  const claims = readToken(req.body.refreshToken, 'refresh');
+  if (!claims) return res.status(401).json({ error: 'Sesi berakhir. Silakan masuk kembali.' });
+  const { rows } = await pool.query("SELECT id,username,full_name,role FROM users WHERE id=$1 AND status='active'", [claims.sub]);
+  const profile = rows[0];
+  if (!profile) return res.status(401).json({ error: 'Akun tidak aktif atau profil tidak ditemukan.' });
+  const user = { id: profile.id, username: profile.username, name: profile.full_name, role: profile.role };
+  res.json({ token: signToken(user, 'access', 60 * 60), refreshToken: signToken(user, 'refresh', 30 * 24 * 60 * 60) });
 }));
 app.get('/api/me', auth, (req, res) => res.json({ user: req.user }));
 app.get('/api/catalog', auth, asyncRoute(async (_req, res) => {
@@ -89,15 +124,13 @@ app.post('/api/users',auth,admin,asyncRoute(async(req,res)=>{
   if(!id&&!String(u.password||'').match(/^.{8,}$/))return res.status(400).json({error:'Password minimal 8 karakter.'});
   const active=u.status==='inactive'?'inactive':'active';
   if(id){
-    const {rows}=await pool.query('SELECT auth_uid FROM users WHERE id=$1',[id]);if(!rows[0])return res.status(404).json({error:'Akun tidak ditemukan.'});
-    const authUpdate={email:u.email,user_metadata:{full_name:u.full_name}};if(u.password)authUpdate.password=u.password;
-    const {error}=await supabaseAdmin.auth.admin.updateUserById(rows[0].auth_uid,authUpdate);if(error)throw Object.assign(Error(error.message),{status:400});
-    await pool.query('UPDATE users SET username=$1,email=$2,full_name=$3,role=$4,status=$5 WHERE id=$6',[u.username,u.email,u.full_name,u.role,active,id]);
+    const {rows}=await pool.query('SELECT id FROM users WHERE id=$1',[id]);if(!rows[0])return res.status(404).json({error:'Akun tidak ditemukan.'});
+    const passwordHash=u.password?await hashPassword(String(u.password)):null;
+    if(u.password&&!/^.{8,}$/.test(String(u.password)))return res.status(400).json({error:'Password minimal 8 karakter.'});
+    await pool.query('UPDATE users SET username=$1,email=$2,full_name=$3,role=$4,status=$5,password_hash=COALESCE($6,password_hash) WHERE id=$7',[u.username,u.email,u.full_name,u.role,active,passwordHash,id]);
   }else{
-    const {data,error}=await supabaseAdmin.auth.admin.createUser({email:u.email,password:u.password,email_confirm:true,user_metadata:{full_name:u.full_name}});
-    if(error)throw Object.assign(Error(error.message),{status:400});
-    try{await pool.query('INSERT INTO users(auth_uid,username,email,full_name,role,status) VALUES($1,$2,$3,$4,$5,$6)',[data.user.id,u.username,u.email,u.full_name,u.role,active]);}
-    catch(e){await supabaseAdmin.auth.admin.deleteUser(data.user.id);throw e;}
+    const passwordHash=await hashPassword(String(u.password));
+    await pool.query('INSERT INTO users(auth_uid,username,email,full_name,role,status,password_hash) VALUES(NULL,$1,$2,$3,$4,$5,$6)',[u.username,u.email,u.full_name,u.role,active,passwordHash]);
   }
   res.json({ok:true});
 }));

@@ -1,11 +1,12 @@
 import 'dotenv/config';
 import pg from 'pg';
-import { createClient } from '@supabase/supabase-js';
 import { ensureSupabaseReady } from '../api/bootstrap.js';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, options: '-c search_path=titik_temu,public', ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false } });
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const connectionUrl = databaseUrl ? new URL(databaseUrl) : null;
+for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert']) connectionUrl?.searchParams.delete(key);
+const pool = new pg.Pool({ connectionString: connectionUrl?.toString(), options: '-c search_path=titik_temu,public', ssl: databaseUrl?.includes('localhost') ? false : { rejectUnauthorized: false } });
 try {
-  await ensureSupabaseReady(pool, supabase);
-  console.log('Setup Supabase selesai. Akun demo: admin / kasir / pelayan — password: password');
+  await ensureSupabaseReady(pool);
+  console.log('Setup database selesai. Akun demo: admin / kasir / pelayan — password: password');
 } finally { await pool.end(); }

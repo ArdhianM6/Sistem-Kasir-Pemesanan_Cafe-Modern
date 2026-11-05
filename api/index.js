@@ -5,7 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { ensureSupabaseReady } from './bootstrap.js';
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, options: '-c search_path=titik_temu,public', ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false }, max: 3, idleTimeoutMillis: 5000 });
+const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const pool = new Pool({ connectionString: databaseUrl, options: '-c search_path=titik_temu,public', ssl: databaseUrl?.includes('localhost') ? false : { rejectUnauthorized: false }, max: 3, idleTimeoutMillis: 5000 });
 const supabaseAuth = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const app = express();

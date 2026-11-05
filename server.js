@@ -1,0 +1,11 @@
+import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import api from './api/index.js';
+const here = path.dirname(fileURLToPath(import.meta.url));
+const app = express();
+app.use(api);
+app.use(express.static(path.join(here, 'dist')));
+app.get('*path', (_req, res) => res.sendFile(path.join(here, 'dist', 'index.html')));
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Titik Temu POS berjalan di http://localhost:${port}`));

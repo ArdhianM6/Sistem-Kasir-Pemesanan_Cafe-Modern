@@ -1,94 +1,57 @@
-# Titik Temu Kopi — Sistem Kasir & Pemesanan
+# Titik Temu Kopi — React + Node.js + Supabase
 
-Aplikasi POS kafe berbasis PHP 8.1+ dan MySQL/MariaDB. Dibangun mengikuti empat modul praktik: autentikasi dan hak akses, dashboard operasional, transaksi dine-in/takeaway, dan laporan penjualan.
+Aplikasi kasir kafe dengan UI React, API Express di Vercel Functions, database Supabase PostgreSQL, dan login Supabase Auth. Data transaksi dan stok tersimpan di project Supabase yang sama setelah deploy.
 
-## Yang tersedia
+## Fitur
 
-- Login aman dengan password hash, sesi yang diperbarui saat masuk, token CSRF, dan pembatasan halaman berdasarkan peran.
-- Peran admin/manager untuk dashboard, laporan, menu, kategori, stok, dan akun tim. Kasir/pelayan dapat membuat pesanan dan melihat transaksi serta struk miliknya sendiri.
-- Dashboard dengan omzet dan jumlah transaksi harian, menu terlaris, peringatan stok, grafik tujuh hari, serta pesanan terakhir.
-- Transaksi detail dengan nomor faktur `INV-POS-YYYYMMDD-XXXX`, dine-in wajib memilih meja, catatan item, diskon, pajak, biaya layanan, empat metode pembayaran, dan hitung kembalian.
-- Validasi stok dan nominal bayar di server. Stok dikunci dan dikurangi dalam transaksi database yang sama dengan header/detail pesanan. Pembatalan mengembalikan stok.
-- Cetak struk ukuran thermal melalui dialog cetak browser, laporan dengan rentang tanggal/kategori/metode, cetak atau simpan sebagai PDF, serta unduh CSV yang dapat dibuka di Excel.
-- Kelola menu dan persediaan dengan satuan per produk; tambah, ubah, nonaktifkan, atau hapus kategori; serta tambah/edit/nonaktifkan akun tim.
+- Login Supabase Auth dengan profil dan role admin/manager/kasir/pelayan.
+- Dashboard, transaksi dine-in/takeaway, pembayaran, kembalian, riwayat, struk, dan laporan.
+- Database PostgreSQL memakai transaksi untuk mengunci stok, menyimpan order dan detail, serta mengembalikan stok ketika order dibatalkan.
+- Pengelolaan menu, kategori, dan akun tim. Password akun dikelola Supabase Auth.
 
-## Kebutuhan
+## Otomatisasi setup Supabase
 
-- PHP 8.1 atau lebih baru dengan ekstensi `PDO` dan `pdo_mysql`.
-- MySQL 8+ atau MariaDB yang mendukung InnoDB dan subquery.
-- Browser modern.
+Saat API pertama kali dibuka, aplikasi otomatis membuat/memperbarui tabel, akun Supabase Auth demo, profil role, kategori, dan menu awal. Tidak perlu membuka SQL Editor atau menjalankan seed manual. Setup aman diulang dan tidak menghapus pesanan/data menu yang sudah ada.
+
+Tidak perlu membuat project Supabase baru jika kuota project Anda penuh. Aplikasi menggunakan schema database terpisah bernama `titik_temu` di dalam project yang sudah ada, sehingga tabel aplikasi tidak bercampur dengan tabel `public` milik project lain. Cukup hubungkan project tersebut dengan URL, key, dan koneksi database:
+
+- `SUPABASE_URL`: Project URL.
+- `SUPABASE_ANON_KEY`: publishable/anon key.
+- `SUPABASE_SERVICE_ROLE_KEY`: secret/service role key, server saja.
+- `DATABASE_URL`: PostgreSQL connection string Supabase; gunakan pooler untuk Vercel.
+
+`.env.example` berisi nama variabel tersebut. Isi `.env` lokal untuk menjalankan proyek di komputer. Seed akun demo dipanggil otomatis; `npm run seed` tersedia sebagai cara manual untuk memicu setup lebih awal.
+
+Akun demo: `admin`, `manager`, `kasir`, atau `pelayan`; password awal `password`.
 
 ## Menjalankan lokal
 
-1. Pastikan MySQL berjalan. Buat database dan tabel dengan mengimpor `database/schema.sql` lewat phpMyAdmin atau klien MySQL.
-2. Isi data awal dengan mengimpor `database/seed.sql`.
-3. Jika akses database bukan `root` tanpa password, atur variabel lingkungan `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, dan `DB_PASS`, atau ubah nilai awal di `config/config.php`.
-4. Dari folder project, jalankan:
+Butuh Node.js 20+.
 
-   ```sh
-   php -S 127.0.0.1:8000 -t public
-   ```
-
-5. Buka `http://127.0.0.1:8000`.
-
-Jika database berasal dari versi awal project sebelum kolom satuan ditambahkan, jalankan sekali `database/migration_001_product_units.sql` dari prompt MariaDB/MySQL. Jangan jalankan migrasi yang sama berulang kali.
-
-Untuk XAMPP, letakkan project di `htdocs`, impor dua berkas SQL berurutan, lalu buka folder `public` melalui Apache. Atur document root Apache ke folder `public` agar direktori konfigurasi, SQL, dan kode aplikasi tidak disajikan ke publik.
-
-## Akun awal
-
-Semua akun demo memakai password `password`. Login dapat menggunakan username atau email.
-
-| Peran | Username | Email | Password |
-| --- | --- | --- | --- |
-| Administrator | `admin` | `admin@titikkopi.local` | `password` |
-| Manager | `manager` | `manager@titikkopi.local` | `password` |
-| Kasir | `kasir` | `kasir@titikkopi.local` | `password` |
-| Pelayan | `pelayan` | `pelayan@titikkopi.local` | `password` |
-
-Ganti password contoh sebelum aplikasi digunakan di lingkungan nyata. Buat akun baru melalui halaman **Akun pengguna**.
-
-## Pengaturan
-
-Konfigurasi koneksi database, tarif pajak restoran, biaya layanan, dan batas stok minimum ada di `config/config.php`. Tarif awal aplikasi adalah pajak 10%, biaya layanan 5%, dan peringatan stok 5 item. Sesuaikan tarif pajak dengan kebijakan usaha setempat.
-
-## Struktur project
-
-```text
-app/
-  Domain/Order/               Perhitungan total transaksi
-  Application/
-    Contracts/                Antarmuka repository
-    UseCases/                 Login, buat pesanan, ubah status
-    Services/                 Kebutuhan dashboard, katalog, dan laporan
-  Infrastructure/Persistence/ Implementasi repository dengan PDO
-  Presentation/
-    Http/                     Controller dan alur request/response
-    Support/                  Helper presentasi, CSRF, sesi, format
-  views/                      Template halaman
-  bootstrap.php               Autoload, konfigurasi, koneksi, perakitan aplikasi
-config/config.php     Konfigurasi lokal
-database/schema.sql   Skema 5 tabel InnoDB
-database/seed.sql     Akun, kategori, dan menu demo
-database/migration_001_product_units.sql  Penyesuaian database versi awal
-public/index.php      Entry point HTTP
-public/assets/        CSS dan JavaScript antarmuka
+```sh
+npm start
+npm run dev
 ```
 
-### Pembagian tanggung jawab
+Buka `http://localhost:5173`. Vite meneruskan `/api` ke Express di port 3000.
 
-- **Domain** berisi aturan inti yang tidak bergantung pada database atau halaman web, seperti kalkulasi subtotal, diskon, pajak, biaya layanan, dan total.
-- **Application** mengatur alur penggunaan aplikasi melalui use case dan service. Lapisan ini bergantung pada kontrak repository, bukan pada PDO.
-- **Infrastructure** menerapkan kontrak tersebut untuk MySQL/MariaDB menggunakan PDO.
-- **Presentation** menangani request, validasi sesi/akses, dan penyajian view. `public/index.php` menjadi entry point, sedangkan `app/bootstrap.php` merakit implementasi yang dibutuhkan.
+## Deploy ke Vercel
 
-Ketergantungan alurnya mengarah ke dalam: Presentation memanggil Application, Application memakai kontrak, lalu Infrastructure menyediakan implementasinya. Skema database dan data awal tidak berubah. Ini menerapkan prinsip Clean Architecture dalam skala project praktik; view masih berupa template PHP dan helper sesi masih berupa fungsi presentasi sederhana.
+1. Hubungkan repository ke Vercel. Framework preset Vite, build command `npm run build`, output `dist`.
+2. Di **Project → Settings → Environment Variables**, atur empat variabel Supabase di atas, `TAX_RATE=0.10`, `SERVICE_RATE=0.05`, dan `LOW_STOCK_LIMIT=5`.
+3. Deploy. Kunjungan pertama ke API otomatis membuat schema `titik_temu`, tabel, dan akun demo; setelah itu login dengan `admin` / `password`.
 
-### Catatan implementasi
+> Jangan commit `.env` atau membagikan secret/service role key. Akun demo menggunakan password publik, jadi ganti passwordnya di Supabase Auth sebelum membagikan live demo. Project Supabase menjadi tempat penyimpanan persisten; Vercel hanya menjalankan UI dan API.
 
-- Harga disimpan sebagai rupiah bulat; persentase pajak dan layanan dihitung server sebelum transaksi disimpan.
-- Setiap produk memiliki satuan (misalnya gelas, porsi, buah, atau potong); satuan produk ikut disimpan sebagai snapshot di detail pesanan.
-- Nomor faktur berurutan mengikuti ID pesanan, dengan urutan minimum empat digit dan tanggal hari transaksi.
-- Status pesanan: diproses, selesai, dan dibatalkan. Pesanan yang sudah dibatalkan menjadi final.
-- Ekspor PDF menggunakan fitur **Cetak / simpan PDF** di browser; ekspor Excel/CSV dibuat langsung oleh aplikasi.
-- Berkas seed sengaja berisi password demo agar aplikasi mudah dicoba. Jangan gunakan akun demo di server publik.
+## Struktur
+
+```text
+api/index.js                 Express API, Supabase Auth, transaksi PostgreSQL
+src/main.jsx                 Aplikasi React
+src/style.css                Tampilan responsif
+database/schema.postgres.sql Skema Supabase PostgreSQL
+database/seed-postgres.js    Akun Supabase Auth dan data contoh
+vercel.json                  Routing API dan SPA
+```
+
+Berkas PHP dan MySQL lama tetap disimpan sebagai arsip versi awal. Deployment React tidak memakai entry point PHP tersebut.

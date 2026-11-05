@@ -16,5 +16,8 @@ desktop.ini
 # Dependencies and runtime artifacts
 /vendor/
 /node_modules/
+/dist/
+/.vercel/
 /storage/logs/
 *.log
+npm-debug.log*

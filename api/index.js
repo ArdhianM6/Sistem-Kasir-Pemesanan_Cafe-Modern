@@ -84,7 +84,7 @@ app.post('/api/refresh', asyncRoute(async (req, res) => {
 }));
 app.get('/api/me', auth, (req, res) => res.json({ user: req.user }));
 app.get('/api/catalog', auth, asyncRoute(async (_req, res) => {
-  const [cats, products] = await Promise.all([pool.query("SELECT id,name FROM categories WHERE status='active' ORDER BY name"), pool.query("SELECT p.id,p.name,p.selling_price,p.stock,p.unit,p.category_id,c.name category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND c.status='active' AND p.stock>0 ORDER BY c.name,p.name")]);
+  const [cats, products] = await Promise.all([pool.query("SELECT id,name FROM categories WHERE status='active' ORDER BY name"), pool.query("SELECT p.id,p.sku,p.name,p.selling_price,p.stock,p.unit,p.category_id,c.name category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND c.status='active' AND p.stock>0 ORDER BY c.name,p.name")]);
   res.json({ categories: cats.rows, products: products.rows });
 }));
 app.get('/api/dashboard', auth, asyncRoute(async (req, res) => {
